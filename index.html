@@ -87,7 +87,7 @@
                 let jstHour = d.getHours().toString().padStart(2, '0');
                 let jstMin = d.getMinutes().toString().padStart(2, '0');
 
-                return `<span class="jst-time">(JST: ${jstDay}日 ${jstHour}:${jstMin})</span>`;
+                return `<span class="jst-time">(JST : ${jstDay}日 ${jstHour}:${jstMin}発行)</span>`;
             }
             return "";
         }
@@ -180,7 +180,7 @@
                         y = margin;
                     }
                     doc.setFont("helvetica", "bold");
-                    doc.setFontSize(12);
+                    doc.setFontSize(10);
                     doc.text(`${icao} ${type}`, margin, y);
                     y += lineHeight + 5;
 
