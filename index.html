@@ -40,7 +40,7 @@
     <div class="search-container">
         <input type="text" id="icao" placeholder="スペース区切り">
         <button onclick="fetchWeather()">Search</button>
-        <button onclick="downloadPDF()" class="btn-pdf">PDF Download</button>
+        <button onclick="downloadPDF()" class="btn-pdf">Download PDF</button>
     </div>
     
     <div id="result"></div>
@@ -102,7 +102,7 @@
                 return;
             }
 
-            resultDiv.innerHTML = '<p class="loading">検索中...</p>';
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
             let htmlOutput = '';
 
             for (const icao of icaos) {
