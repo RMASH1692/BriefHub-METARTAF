@@ -5,114 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aviation Weather</title>
     <style>
-        /* 無駄を省いたシンプルなデザイン */
-        body {
-            font-family: Arial, sans-serif;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #fff;
-        }
-        h2 {
-            text-align: center;
-            font-weight: normal;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-            letter-spacing: 1px;
-        }
-        .search-container {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 30px;
-        }
-        input[type="text"] {
-            padding: 10px;
-            font-size: 16px;
-            border: 1px solid #999;
-            width: 60%;
-            text-transform: uppercase;
-            outline: none;
-        }
-        input[type="text"]:focus {
-            border-color: #333;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #333;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #555;
-        }
-        /* 結果表示部のデザイン */
-        .card {
-            border: 1px solid #ccc;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .card h3 {
-            margin: 0 0 15px 0;
-            font-size: 20px;
-            border-bottom: 1px dashed #eee;
-            padding-bottom: 10px;
-        }
-        .data-section {
-            margin-bottom: 15px;
-        }
-        .data-label {
-            font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 5px;
-            color: #555;
-        }
-        .raw-text {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #f9f9f9;
-            padding: 12px;
-            border: 1px solid #eee;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-size: 15px;
-            line-height: 1.4;
-        }
+        body { font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; }
+        h2 { text-align: center; font-weight: normal; border-bottom: 2px solid #0078D4; padding-bottom: 15px; margin-bottom: 20px; letter-spacing: 1px; color: #0078D4; }
+        .search-container { display: flex; gap: 10px; justify-content: center; margin-bottom: 30px; }
+        input[type="text"] { padding: 10px; font-size: 16px; border: 1px solid #ccc; width: 60%; text-transform: uppercase; outline: none; }
+        input[type="text"]:focus { border-color: #0078D4; }
+        button { padding: 10px 20px; font-size: 16px; background-color: #0078D4; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #005a9e; }
+        
+        .card { border-left: 4px solid #0078D4; border-top: 1px solid #eee; border-right: 1px solid #eee; border-bottom: 1px solid #eee; padding: 20px; margin-bottom: 20px; }
+        .card h3 { margin: 0 0 15px 0; font-size: 20px; color: #0078D4; border-bottom: 1px dashed #eee; padding-bottom: 10px; }
+        .data-section { margin-bottom: 15px; }
+        .data-label { font-weight: bold; font-size: 14px; margin-bottom: 5px; color: #0078D4; }
+        .raw-text { font-family: 'Courier New', Courier, monospace; background-color: #f9f9f9; padding: 12px; border: 1px solid #eee; white-space: pre-wrap; word-wrap: break-word; font-size: 15px; line-height: 1.4; }
+        
         .msg-none { color: #777; font-style: italic; }
         .msg-error { color: #d9534f; }
-        .loading { text-align: center; color: #777; }
+        .loading { text-align: center; color: #0078D4; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <h2>METAR / TAF</h2>
     <div class="search-container">
-        <input type="text" id="icao" placeholder="スペース区切り">
+        <input type="text" id="icao" placeholder="RJTT RJAA (スペース区切り)">
         <button onclick="fetchWeather()">Search</button>
     </div>
     
     <div id="result"></div>
 
     <script>
-        // APIの応答を安全に処理する補助関数
         async function safeFetchJson(url) {
             try {
                 const res = await fetch(url);
-                // サーバーからデータがない（204）やエラー（400等）が返ってきた場合の処理
-                if (res.status === 204 || !res.ok) {
-                    return { error: true };
-                }
+                if (res.status === 204 || !res.ok) return { error: true };
                 const data = await res.json();
-                // AVWXが正常応答の中にerrorを含ませてきた場合
                 if (data.error) return { error: true };
                 return data;
-            } catch (e) {
-                // 完全なネットワーク遮断などの場合
-                return { error: true };
-            }
+            } catch (e) { return { error: true }; }
+        }
+
+        // TAF整形関数
+        function formatTaf(text) {
+            const keywords = ['TEMPO', 'BECMG', 'FM', 'PROB', 'INTER'];
+            let formatted = text;
+            keywords.forEach(key => {
+                const regex = new RegExp(`\\s(${key})`, 'g');
+                formatted = formatted.replace(regex, '\n  $1');
+            });
+            return formatted;
         }
 
         async function fetchWeather() {
@@ -121,7 +62,7 @@
             const resultDiv = document.getElementById('result');
             
             if(icaos.length === 0) {
-                resultDiv.innerHTML = '<p class="msg-error" style="text-align:center;">ICAOコード</p>';
+                resultDiv.innerHTML = '<p class="msg-error" style="text-align:center;">ICAOコードを入力してください。</p>';
                 return;
             }
 
@@ -132,53 +73,25 @@
                 const metarUrl = `https://weather-api-proxy.bbfn2187.workers.dev/?icao=${icao}&type=metar`;
                 const tafUrl   = `https://weather-api-proxy.bbfn2187.workers.dev/?icao=${icao}&type=taf`;
 
-                try {
-                    // 並行してデータ取得
-                    const [metarData, tafData] = await Promise.all([
-                        safeFetchJson(metarUrl), 
-                        safeFetchJson(tafUrl)
-                    ]);
+                const [metarData, tafData] = await Promise.all([safeFetchJson(metarUrl), safeFetchJson(tafUrl)]);
 
-                    // METARの表示内容を決定
-                    let metarContent = '';
-                    if (metarData.error || !metarData.raw) {
-                        metarContent = '<span class="msg-none">現在有効なMETARがありません</span>';
-                    } else {
-                        metarContent = metarData.raw;
-                    }
+                let metarContent = (metarData.error || !metarData.raw) ? '<span class="msg-none">現在有効なMETARがありません</span>' : metarData.raw;
+                let tafContent = (tafData.error || !tafData.raw) ? '<span class="msg-none">TAFは発行されていません</span>' : formatTaf(tafData.raw);
 
-                    // TAFの表示内容を決定
-                    let tafContent = '';
-                    if (tafData.error || !tafData.raw) {
-                        tafContent = '<span class="msg-none">TAFは発行されていません</span>';
-                    } else {
-                        tafContent = tafData.raw;
-                    }
-
-                    // HTMLの組み立て
-                    htmlOutput += `
-                        <div class="card">
-                            <h3>${icao}</h3>
-                            <div class="data-section">
-                                <div class="data-label">METAR</div>
-                                <div class="raw-text">${metarContent}</div>
-                            </div>
-                            <div class="data-section">
-                                <div class="data-label">TAF</div>
-                                <div class="raw-text">${tafContent}</div>
-                            </div>
+                htmlOutput += `
+                    <div class="card">
+                        <h3>${icao}</h3>
+                        <div class="data-section">
+                            <div class="data-label">METAR</div>
+                            <div class="raw-text">${metarContent}</div>
                         </div>
-                    `;
-                } catch (error) {
-                    htmlOutput += `
-                        <div class="card">
-                            <h3>${icao}</h3>
-                            <p class="msg-error">予期せぬエラーが発生しました。</p>
+                        <div class="data-section">
+                            <div class="data-label">TAF</div>
+                            <div class="raw-text">${tafContent}</div>
                         </div>
-                    `;
-                }
+                    </div>
+                `;
             }
-            
             resultDiv.innerHTML = htmlOutput;
         }
     </script>
