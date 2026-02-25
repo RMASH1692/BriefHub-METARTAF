@@ -180,13 +180,13 @@
                         y = margin;
                     }
                     doc.setFont("helvetica", "bold");
-                    doc.setFontSize(10);
+                    doc.setFontSize(12);
                     doc.text(`${icao} ${type}`, margin, y);
                     y += lineHeight + 5;
 
                     // 天気データの描画
                     doc.setFont("courier", "normal");
-                    doc.setFontSize(12);
+                    doc.setFontSize(14);
                     
                     // 改行コード(TAF等)を維持したまま、横幅で折り返し処理
                     const lines = text.split('\n');
