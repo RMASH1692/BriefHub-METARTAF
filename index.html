@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ja">
+<body>
+    <h2>METAR/TAF</h2>
+    <input type="text" id="icao" placeholder="ICAOコード(例:RJTT)">
+    <button onclick="fetchWeather()">Search</button>
+    <pre id="result"></pre>
+    <script>
+        async function fetchWeather() {
+            const icao = document.getElementById('icao').value;
+            const url = 'https://weather-api-proxy.bbfn2187.workers.dev/' + '?icao=' + icao;
+            const res = await fetch(url);
+            const data = await res.json();
+            document.getElementById('result').innerText = data.raw;
+        }
+    </script>
+</body>
+</html>
