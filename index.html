@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aviation Weather</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; }
         h2 { text-align: center; font-weight: normal; border-bottom: 2px solid #0078D4; padding-bottom: 15px; margin-bottom: 20px; letter-spacing: 1px; color: #0078D4; }
@@ -12,11 +13,20 @@
         input[type="text"]:focus { border-color: #0078D4; }
         button { padding: 10px 20px; font-size: 16px; background-color: #0078D4; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #005a9e; }
+        .btn-pdf { background-color: #28a745; margin-left: 10px; }
+        .btn-pdf:hover { background-color: #218838; }
         
         .card { border-left: 4px solid #0078D4; border-top: 1px solid #eee; border-right: 1px solid #eee; border-bottom: 1px solid #eee; padding: 20px; margin-bottom: 20px; }
-        .card h3 { margin: 0 0 15px 0; font-size: 20px; color: #0078D4; border-bottom: 1px dashed #eee; padding-bottom: 10px; }
+        /* チェックボックスを右寄せにするためのFlexbox設定 */
+        .card h3 { display: flex; align-items: center; margin: 0 0 15px 0; font-size: 20px; color: #0078D4; border-bottom: 1px dashed #eee; padding-bottom: 10px; }
+        .checkbox-group { margin-left: auto; font-size: 14px; font-weight: normal; color: #333; }
+        .checkbox-group label { cursor: pointer; margin-left: 15px; }
+
         .data-section { margin-bottom: 15px; }
         .data-label { font-weight: bold; font-size: 14px; margin-bottom: 5px; color: #0078D4; }
+        /* JST時間の装飾 */
+        .jst-time { font-size: 12px; color: #777; font-weight: normal; margin-left: 10px; }
+        
         .raw-text { font-family: 'Courier New', Courier, monospace; background-color: #f9f9f9; padding: 12px; border: 1px solid #eee; white-space: pre-wrap; word-wrap: break-word; font-size: 15px; line-height: 1.4; }
         
         .msg-none { color: #777; font-style: italic; }
@@ -30,6 +40,7 @@
     <div class="search-container">
         <input type="text" id="icao" placeholder="スペース区切り">
         <button onclick="fetchWeather()">Search</button>
+        <button onclick="downloadPDF()" class="btn-pdf">PDF Download</button>
     </div>
     
     <div id="result"></div>
@@ -56,6 +67,31 @@
             return formatted;
         }
 
+        // ZタイムをJSTに変換する関数
+        function convertToJST(rawText) {
+            if (!rawText) return "";
+            // ICAOコード直後のDDHHMMZ形式を抽出
+            const match = rawText.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
+            if (match) {
+                let d = new Date();
+                let targetDay = parseInt(match[1], 10);
+                
+                // 月を跨いだ場合(例: 1日に前月31日のデータを取得)の補正
+                if (targetDay > d.getUTCDate() + 15) d.setUTCMonth(d.getUTCMonth() - 1);
+                
+                d.setUTCDate(targetDay);
+                d.setUTCHours(parseInt(match[2], 10));
+                d.setUTCMinutes(parseInt(match[3], 10));
+
+                let jstDay = d.getDate().toString().padStart(2, '0');
+                let jstHour = d.getHours().toString().padStart(2, '0');
+                let jstMin = d.getMinutes().toString().padStart(2, '0');
+
+                return `<span class="jst-time">(JST: ${jstDay}日 ${jstHour}:${jstMin})</span>`;
+            }
+            return "";
+        }
+
         async function fetchWeather() {
             const inputVal = document.getElementById('icao').value.toUpperCase();
             const icaos = inputVal.split(/[\s,]+/).filter(Boolean); 
@@ -75,24 +111,107 @@
 
                 const [metarData, tafData] = await Promise.all([safeFetchJson(metarUrl), safeFetchJson(tafUrl)]);
 
-                let metarContent = (metarData.error || !metarData.raw) ? '<span class="msg-none">現在有効なMETARがありません</span>' : metarData.raw;
-                let tafContent = (tafData.error || !tafData.raw) ? '<span class="msg-none">TAFは発行されていません</span>' : formatTaf(tafData.raw);
+                let hasMetar = !metarData.error && metarData.raw;
+                let hasTaf = !tafData.error && tafData.raw;
+
+                let metarContent = hasMetar ? metarData.raw : '<span class="msg-none">現在有効なMETARがありません</span>';
+                let tafContent = hasTaf ? formatTaf(tafData.raw) : '<span class="msg-none">TAFは発行されていません</span>';
+
+                let metarJst = hasMetar ? convertToJST(metarData.raw) : '';
+                let tafJst = hasTaf ? convertToJST(tafData.raw) : '';
 
                 htmlOutput += `
                     <div class="card">
-                        <h3>${icao}</h3>
+                        <h3>
+                            ${icao}
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" class="pdf-cb" value="metar-${icao}" data-icao="${icao}" data-type="METAR"> METAR</label>
+                                <label><input type="checkbox" class="pdf-cb" value="taf-${icao}" data-icao="${icao}" data-type="TAF"> TAF</label>
+                            </div>
+                        </h3>
                         <div class="data-section">
-                            <div class="data-label">METAR</div>
-                            <div class="raw-text">${metarContent}</div>
+                            <div class="data-label">METAR ${metarJst}</div>
+                            <div class="raw-text" id="raw-metar-${icao}">${metarContent}</div>
                         </div>
                         <div class="data-section">
-                            <div class="data-label">TAF</div>
-                            <div class="raw-text">${tafContent}</div>
+                            <div class="data-label">TAF ${tafJst}</div>
+                            <div class="raw-text" id="raw-taf-${icao}">${tafContent}</div>
                         </div>
                     </div>
                 `;
             }
             resultDiv.innerHTML = htmlOutput;
+        }
+
+        // 選択した要素をA4横向きPDFとして出力する関数
+        function downloadPDF() {
+            const checkboxes = document.querySelectorAll('.pdf-cb:checked');
+            if (checkboxes.length === 0) {
+                alert("PDFに出力するMETARまたはTAFにチェックを入れてください。");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape', 'pt', 'a4');
+            
+            const margin = 40;
+            const lineHeight = 14;
+            const pageHeight = doc.internal.pageSize.height;
+            const pageWidth = doc.internal.pageSize.width;
+            let y = margin;
+            let hasValidData = false;
+
+            checkboxes.forEach(cb => {
+                const id = cb.value; // metar-RJTT など
+                const type = cb.getAttribute('data-type');
+                const icao = cb.getAttribute('data-icao');
+                const textEl = document.getElementById(`raw-${id}`);
+                
+                if (textEl) {
+                    let text = textEl.innerText;
+                    // 無効なメッセージの場合は出力から除外
+                    if (text.includes("現在有効なMETARがありません") || text.includes("TAFは発行されていません")) return;
+
+                    hasValidData = true;
+
+                    // タイトル描画 (例: RJTT METAR)
+                    if (y > pageHeight - margin - 30) {
+                        doc.addPage();
+                        y = margin;
+                    }
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(12);
+                    doc.text(`${icao} ${type}`, margin, y);
+                    y += lineHeight + 5;
+
+                    // 天気データの描画
+                    doc.setFont("courier", "normal");
+                    doc.setFontSize(10);
+                    
+                    // 改行コード(TAF等)を維持したまま、横幅で折り返し処理
+                    const lines = text.split('\n');
+                    lines.forEach(rawLine => {
+                        const wrappedLines = doc.splitTextToSize(rawLine, pageWidth - margin * 2);
+                        wrappedLines.forEach(line => {
+                            if (y > pageHeight - margin) {
+                                doc.addPage();
+                                y = margin;
+                                doc.setFont("courier", "normal");
+                            }
+                            doc.text(line, margin, y);
+                            y += lineHeight;
+                        });
+                    });
+                    y += 15; // 項目ごとの余白
+                }
+            });
+
+            if (!hasValidData) {
+                alert("出力可能な気象データがありません。");
+                return;
+            }
+
+            doc.save("AviationWeather.pdf");
         }
     </script>
 </body>
