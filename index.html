@@ -88,7 +88,7 @@
 </head>
 <body>
 
-    <h2>METAR / TAF Check</h2>
+    <h2>METAR / TAF</h2>
     <div class="search-container">
         <input type="text" id="icao" placeholder="RJTT RJAA (スペース区切り)">
         <button onclick="fetchWeather()">Search</button>
@@ -121,7 +121,7 @@
             const resultDiv = document.getElementById('result');
             
             if(icaos.length === 0) {
-                resultDiv.innerHTML = '<p class="msg-error" style="text-align:center;">ICAOコードを入力してください。</p>';
+                resultDiv.innerHTML = '<p class="msg-error" style="text-align:center;">ICAOコード</p>';
                 return;
             }
 
