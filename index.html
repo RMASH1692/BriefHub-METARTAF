@@ -17,14 +17,12 @@
         .btn-pdf:hover { background-color: #218838; }
         
         .card { border-left: 4px solid #0078D4; border-top: 1px solid #eee; border-right: 1px solid #eee; border-bottom: 1px solid #eee; padding: 20px; margin-bottom: 20px; }
-        /* チェックボックスを右寄せにするためのFlexbox設定 */
         .card h3 { display: flex; align-items: center; margin: 0 0 15px 0; font-size: 20px; color: #0078D4; border-bottom: 1px dashed #eee; padding-bottom: 10px; }
         .checkbox-group { margin-left: auto; font-size: 14px; font-weight: normal; color: #333; }
         .checkbox-group label { cursor: pointer; margin-left: 15px; }
 
         .data-section { margin-bottom: 15px; }
         .data-label { font-weight: bold; font-size: 14px; margin-bottom: 5px; color: #0078D4; }
-        /* JST時間の装飾 */
         .jst-time { font-size: 12px; color: #777; font-weight: normal; margin-left: 10px; }
         
         .raw-text { font-family: 'Courier New', Courier, monospace; background-color: #f9f9f9; padding: 12px; border: 1px solid #eee; white-space: pre-wrap; word-wrap: break-word; font-size: 15px; line-height: 1.4; }
@@ -38,7 +36,7 @@
 
     <h2>METAR / TAF</h2>
     <div class="search-container">
-        <input type="text" id="icao" placeholder="スペース区切り">
+        <input type="text" id="icao" placeholder="スペース区切り" oninput="saveToLocal()">
         <button onclick="fetchWeather()">Search</button>
         <button onclick="downloadPDF()" class="btn-pdf">Download PDF</button>
     </div>
@@ -46,6 +44,21 @@
     <div id="result"></div>
 
     <script>
+        // --- 新機能: LocalStorage関連 ---
+        function saveToLocal() {
+            const val = document.getElementById('icao').value;
+            localStorage.setItem('savedIcaoCodes', val);
+        }
+
+        window.onload = function() {
+            const savedVal = localStorage.getItem('savedIcaoCodes');
+            if (savedVal) {
+                document.getElementById('icao').value = savedVal;
+                fetchWeather(); // 以前の入力があれば自動で検索実行
+            }
+        };
+        // ------------------------------
+
         async function safeFetchJson(url) {
             try {
                 const res = await fetch(url);
@@ -56,7 +69,6 @@
             } catch (e) { return { error: true }; }
         }
 
-        // TAF整形関数
         function formatTaf(text) {
             const keywords = ['TEMPO', 'BECMG', 'FM', 'PROB', 'INTER'];
             let formatted = text;
@@ -67,26 +79,19 @@
             return formatted;
         }
 
-        // ZタイムをJSTに変換する関数
         function convertToJST(rawText) {
             if (!rawText) return "";
-            // ICAOコード直後のDDHHMMZ形式を抽出
             const match = rawText.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
             if (match) {
                 let d = new Date();
                 let targetDay = parseInt(match[1], 10);
-                
-                // 月を跨いだ場合(例: 1日に前月31日のデータを取得)の補正
                 if (targetDay > d.getUTCDate() + 15) d.setUTCMonth(d.getUTCMonth() - 1);
-                
                 d.setUTCDate(targetDay);
                 d.setUTCHours(parseInt(match[2], 10));
                 d.setUTCMinutes(parseInt(match[3], 10));
-
                 let jstDay = d.getDate().toString().padStart(2, '0');
                 let jstHour = d.getHours().toString().padStart(2, '0');
                 let jstMin = d.getMinutes().toString().padStart(2, '0');
-
                 return `<span class="jst-time">(JST : ${jstDay}日 ${jstHour}:${jstMin}発行)</span>`;
             }
             return "";
@@ -98,7 +103,7 @@
             const resultDiv = document.getElementById('result');
             
             if(icaos.length === 0) {
-                resultDiv.innerHTML = '<p class="msg-error" style="text-align:center;">ICAOコードを入力してください。</p>';
+                resultDiv.innerHTML = ''; // 入力が空なら結果をクリア
                 return;
             }
 
@@ -143,17 +148,14 @@
             resultDiv.innerHTML = htmlOutput;
         }
 
-        // 選択した要素をA4横向きPDFとして出力する関数
         function downloadPDF() {
             const checkboxes = document.querySelectorAll('.pdf-cb:checked');
             if (checkboxes.length === 0) {
                 alert("PDFに出力するMETARまたはTAFにチェックを入れてください。");
                 return;
             }
-
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape', 'pt', 'a4');
-            
             const margin = 40;
             const lineHeight = 14;
             const pageHeight = doc.internal.pageSize.height;
@@ -162,19 +164,15 @@
             let hasValidData = false;
 
             checkboxes.forEach(cb => {
-                const id = cb.value; // metar-RJTT など
+                const id = cb.value;
                 const type = cb.getAttribute('data-type');
                 const icao = cb.getAttribute('data-icao');
                 const textEl = document.getElementById(`raw-${id}`);
                 
                 if (textEl) {
                     let text = textEl.innerText;
-                    // 無効なメッセージの場合は出力から除外
                     if (text.includes("現在有効なMETARがありません") || text.includes("TAFは発行されていません")) return;
-
                     hasValidData = true;
-
-                    // タイトル描画 (例: RJTT METAR)
                     if (y > pageHeight - margin - 30) {
                         doc.addPage();
                         y = margin;
@@ -183,12 +181,8 @@
                     doc.setFontSize(12);
                     doc.text(`${icao} ${type}`, margin, y);
                     y += lineHeight + 5;
-
-                    // 天気データの描画
                     doc.setFont("courier", "normal");
                     doc.setFontSize(14);
-                    
-                    // 改行コード(TAF等)を維持したまま、横幅で折り返し処理
                     const lines = text.split('\n');
                     lines.forEach(rawLine => {
                         const wrappedLines = doc.splitTextToSize(rawLine, pageWidth - margin * 2);
@@ -202,15 +196,13 @@
                             y += lineHeight;
                         });
                     });
-                    y += 15; // 項目ごとの余白
+                    y += 15;
                 }
             });
-
             if (!hasValidData) {
                 alert("出力可能な気象データがありません。");
                 return;
             }
-
             doc.save("BriefHub_METARTAF.pdf");
         }
     </script>
