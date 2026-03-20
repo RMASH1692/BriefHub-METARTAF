@@ -169,9 +169,14 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape', 'pt', 'a4');
             const margin = 40;
-            const lineHeight = 14;
+            const lineHeight = 16; // 少し広めに調整
             const pageHeight = doc.internal.pageSize.height;
             const pageWidth = doc.internal.pageSize.width;
+            
+            // JST情報の開始位置（縦に揃えるためのX座標）
+            // Landscape A4は約841pt。Rawテキスト用に余裕を持ちつつ520pt付近に設定
+            const jstAlignX = 520; 
+
             let y = margin;
             let hasValidData = false;
 
@@ -210,12 +215,11 @@
                         }
                     }
 
-                    // --- ヘッダー描画 (太字タイトル + 細字時刻) ---
+                    // --- ヘッダー (1行目：太字タイトル + 細字時刻) ---
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(12);
                     doc.text(`${icao} ${type}`, margin, y);
 
-                    // 時刻情報の組み立て
                     let subHeaderText = "";
                     if (type === 'METAR' && issueTimeStr) {
                         subHeaderText = `(${issueTimeStr})`;
@@ -225,49 +229,54 @@
                     }
 
                     if (subHeaderText) {
-                        doc.setFont("helvetica", "normal"); // 細字に変更
-                        doc.setFontSize(10); // 時刻は少し小さくしてバランス調整
-                        // タイトルの横、一律120ptの位置から時刻を開始（縦を揃える）
-                        doc.text(subHeaderText, margin + 120, y);
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(9);
+                        doc.text(subHeaderText, margin + 120, y); // 1行目の時刻も縦に揃える（近め）
                     }
-
                     y += lineHeight + 5;
                     
                     // --- 本文描画 ---
-                    doc.setFont("courier", "normal");
-                    doc.setFontSize(14);
                     const lines = text.split('\n');
-                    
                     lines.forEach((rawLine, index) => {
-                        let processedLine = rawLine;
+                        let jstInfo = ""; // 追加するJST情報
 
+                        // TAFの各行の有効時刻抽出
                         if (type === 'TAF' && index > 0) {
-                            const periodMatch = processedLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
+                            const periodMatch = rawLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                processedLine += `  (${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST)`;
+                                jstInfo = `(${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST)`;
                             } else {
-                                const fmMatch = processedLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
+                                const fmMatch = rawLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    processedLine += `  (${start.day} ${start.hour}:${start.min} JST~)`;
+                                    jstInfo = `(${start.day} ${start.hour}:${start.min} JST~)`;
                                 }
                             }
                         }
 
-                        const wrappedLines = doc.splitTextToSize(processedLine, pageWidth - margin * 2);
-                        wrappedLines.forEach(line => {
-                            if (y > pageHeight - margin) {
-                                doc.addPage();
-                                y = margin;
-                                doc.setFont("courier", "normal");
-                            }
-                            doc.text(line, margin, y);
-                            y += lineHeight;
-                        });
+                        // 改ページチェック
+                        if (y > pageHeight - margin) {
+                            doc.addPage();
+                            y = margin;
+                        }
+
+                        // 主（Rawデータ）：太字のCourier
+                        doc.setFont("courier", "bold");
+                        doc.setFontSize(13);
+                        doc.text(rawLine, margin, y);
+
+                        // 従（JST情報）：細字のHelvetica
+                        if (jstInfo) {
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(9);
+                            doc.text(jstInfo, jstAlignX, y); // 指定した座標で縦に揃える
+                        }
+
+                        y += lineHeight;
                     });
-                    y += 15;
+                    y += 15; // icaoごとのセパレート
                 }
             });
             
