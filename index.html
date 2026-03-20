@@ -174,8 +174,8 @@
             const pageWidth = doc.internal.pageSize.width;
             
             // JST情報の開始位置（縦に揃えるためのX座標）
-            // Landscape A4は約841pt。Rawテキスト用に余裕を持ちつつ520pt付近に設定
-            const jstAlignX = 520; 
+            // Landscape A4は約841pt。Rawテキスト用に余裕を持ちつつ450pt付近に設定
+            const jstAlignX = 450; 
 
             let y = margin;
             let hasValidData = false;
@@ -262,12 +262,10 @@
                             y = margin;
                         }
 
-                        // 主（Rawデータ）：太字のCourier
-                        doc.setFont("courier", "bold");
+                        doc.setFont("courier", "normal");
                         doc.setFontSize(13);
                         doc.text(rawLine, margin, y);
 
-                        // 従（JST情報）：細字のHelvetica
                         if (jstInfo) {
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(9);
