@@ -192,12 +192,12 @@
                         y = margin;
                     }
 
-                    // --- [追加] 発行時刻と有効時刻の抽出・変換 ---
+                    // --- [追加] 発行時刻と有効時刻の抽出・変換 (英語表記) ---
                     let issueTimeStr = "";
                     const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
                     if (issueMatch) {
                         let t = parseToJstObj(issueMatch[1], issueMatch[2], issueMatch[3]);
-                        issueTimeStr = `${t.day}日 ${t.hour}:${t.min} JST 発行`;
+                        issueTimeStr = `${t.day}d ${t.hour}:${t.min} JST Issued`; // 英語化
                     }
 
                     let validStr = "";
@@ -207,7 +207,7 @@
                         if (validMatch) {
                             let start = parseToJstObj(validMatch[1], validMatch[2]);
                             let end = parseToJstObj(validMatch[3], validMatch[4]);
-                            validStr = `${start.day}日 ${start.hour}:${start.min}~${end.day}日 ${end.hour}:${end.min} JST 有効`;
+                            validStr = `${start.day}d ${start.hour}:${start.min}~${end.day}d ${end.hour}:${end.min} JST Valid`; // 英語化
                         }
                     }
 
@@ -233,20 +233,20 @@
                     lines.forEach((rawLine, index) => {
                         let processedLine = rawLine;
 
-                        // --- [追加] TAFの2行目以降の有効時刻抽出 ---
+                        // --- [追加] TAFの2行目以降の有効時刻抽出 (英語表記) ---
                         if (type === 'TAF' && index > 0) {
                             // BECMG, TEMPO 等の DDHH/DDHH を検索
                             const periodMatch = processedLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                processedLine += `  (${start.day}日 ${start.hour}:${start.min}~${end.day}日 ${end.hour}:${end.min} JST)`;
+                                processedLine += `  (${start.day}d ${start.hour}:${start.min}~${end.day}d ${end.hour}:${end.min} JST)`; // 英語化
                             } else {
                                 // FM の DDHHMM を検索
                                 const fmMatch = processedLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    processedLine += `  (${start.day}日 ${start.hour}:${start.min} JST~)`;
+                                    processedLine += `  (${start.day}d ${start.hour}:${start.min} JST~)`; // 英語化
                                 }
                             }
                         }
