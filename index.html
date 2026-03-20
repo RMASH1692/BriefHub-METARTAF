@@ -44,7 +44,6 @@
     <div id="result"></div>
 
     <script>
-        // --- 新機能: LocalStorage関連 ---
         function saveToLocal() {
             const val = document.getElementById('icao').value;
             localStorage.setItem('savedIcaoCodes', val);
@@ -54,10 +53,9 @@
             const savedVal = localStorage.getItem('savedIcaoCodes');
             if (savedVal) {
                 document.getElementById('icao').value = savedVal;
-                fetchWeather(); // 以前の入力があれば自動で検索実行
+                fetchWeather();
             }
         };
-        // ------------------------------
 
         async function safeFetchJson(url) {
             try {
@@ -103,7 +101,7 @@
             const resultDiv = document.getElementById('result');
             
             if(icaos.length === 0) {
-                resultDiv.innerHTML = ''; // 入力が空なら結果をクリア
+                resultDiv.innerHTML = '';
                 return;
             }
 
@@ -187,11 +185,13 @@
                     let text = textEl.innerText;
                     if (text.includes("現在有効なMETARがありません") || text.includes("TAFは発行されていません")) return;
                     hasValidData = true;
+
                     if (y > pageHeight - margin - 30) {
                         doc.addPage();
                         y = margin;
                     }
 
+                    // --- 時刻データの解析 ---
                     let issueTimeStr = "";
                     const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
                     if (issueMatch) {
@@ -210,21 +210,30 @@
                         }
                     }
 
-                    // ヘッダーの組み立て
-                    let headerText = `${icao} ${type}`;
-                    if (type === 'METAR' && issueTimeStr) {
-                        headerText += ` (${issueTimeStr})`;
-                    } else if (type === 'TAF') {
-                        if (issueTimeStr && validStr) headerText += ` (${issueTimeStr} / ${validStr})`;
-                        else if (issueTimeStr) headerText += ` (${issueTimeStr})`;
-                    }
-                    // ----------------------------------------------
-
+                    // --- ヘッダー描画 (太字タイトル + 細字時刻) ---
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(12);
-                    doc.text(headerText, margin, y);
+                    doc.text(`${icao} ${type}`, margin, y);
+
+                    // 時刻情報の組み立て
+                    let subHeaderText = "";
+                    if (type === 'METAR' && issueTimeStr) {
+                        subHeaderText = `(${issueTimeStr})`;
+                    } else if (type === 'TAF') {
+                        if (issueTimeStr && validStr) subHeaderText = `(${issueTimeStr} / ${validStr})`;
+                        else if (issueTimeStr) subHeaderText = `(${issueTimeStr})`;
+                    }
+
+                    if (subHeaderText) {
+                        doc.setFont("helvetica", "normal"); // 細字に変更
+                        doc.setFontSize(10); // 時刻は少し小さくしてバランス調整
+                        // タイトルの横、一律120ptの位置から時刻を開始（縦を揃える）
+                        doc.text(subHeaderText, margin + 120, y);
+                    }
+
                     y += lineHeight + 5;
                     
+                    // --- 本文描画 ---
                     doc.setFont("courier", "normal");
                     doc.setFontSize(14);
                     const lines = text.split('\n');
@@ -232,24 +241,20 @@
                     lines.forEach((rawLine, index) => {
                         let processedLine = rawLine;
 
-                        // --- [追加] TAFの2行目以降の有効時刻抽出 (英語表記) ---
                         if (type === 'TAF' && index > 0) {
-                            // BECMG, TEMPO 等の DDHH/DDHH を検索
                             const periodMatch = processedLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                processedLine += `  (${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST)`; // 英語化
+                                processedLine += `  (${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST)`;
                             } else {
-                                // FM の DDHHMM を検索
                                 const fmMatch = processedLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    processedLine += `  (${start.day} ${start.hour}:${start.min} JST~)`; // 英語化
+                                    processedLine += `  (${start.day} ${start.hour}:${start.min} JST~)`;
                                 }
                             }
                         }
-                        // ----------------------------------------------
 
                         const wrappedLines = doc.splitTextToSize(processedLine, pageWidth - margin * 2);
                         wrappedLines.forEach(line => {
@@ -274,3 +279,4 @@
         }
     </script>
 </body>
+</html>
