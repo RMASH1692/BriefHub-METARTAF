@@ -174,8 +174,8 @@
             const pageWidth = doc.internal.pageSize.width;
             
             // JST情報の開始位置（縦に揃えるためのX座標）
-            // Landscape A4は約841pt。Rawテキスト用に余裕を持ちつつ450pt付近に設定
-            const jstAlignX = 450; 
+            // Landscape A4は約841pt。Rawテキスト用に余裕を持ちつつ400pt付近に設定
+            const jstAlignX = 400; 
 
             let y = margin;
             let hasValidData = false;
@@ -211,7 +211,7 @@
                         if (validMatch) {
                             let start = parseToJstObj(validMatch[1], validMatch[2]);
                             let end = parseToJstObj(validMatch[3], validMatch[4]);
-                            validStr = `${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST Valid`;
+                            validStr = `${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST Valid`;
                         }
                     }
 
@@ -246,7 +246,7 @@
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                jstInfo = `(${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST)`;
+                                jstInfo = `(${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST)`;
                             } else {
                                 const fmMatch = rawLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
