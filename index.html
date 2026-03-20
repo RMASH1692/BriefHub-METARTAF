@@ -8,13 +8,16 @@
     <style>
         body { font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; }
         h2 { text-align: center; font-weight: normal; border-bottom: 2px solid #0078D4; padding-bottom: 15px; margin-bottom: 20px; letter-spacing: 1px; color: #0078D4; }
-        .search-container { display: flex; gap: 10px; justify-content: center; margin-bottom: 30px; }
-        input[type="text"] { padding: 10px; font-size: 16px; border: 1px solid #ccc; width: 60%; text-transform: uppercase; outline: none; }
+        .search-container { display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 30px; flex-wrap: wrap; }
+        input[type="text"] { padding: 10px; font-size: 16px; border: 1px solid #ccc; width: 50%; text-transform: uppercase; outline: none; }
         input[type="text"]:focus { border-color: #0078D4; }
         button { padding: 10px 20px; font-size: 16px; background-color: #0078D4; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #005a9e; }
         .btn-pdf { background-color: #28a745; margin-left: 10px; }
         .btn-pdf:hover { background-color: #218838; }
+        
+        /* PDF設定用オプションのスタイル */
+        .pdf-option { font-size: 14px; display: flex; align-items: center; gap: 5px; cursor: pointer; color: #555; }
         
         .card { border-left: 4px solid #0078D4; border-top: 1px solid #eee; border-right: 1px solid #eee; border-bottom: 1px solid #eee; padding: 20px; margin-bottom: 20px; }
         .card h3 { display: flex; align-items: center; margin: 0 0 15px 0; font-size: 20px; color: #0078D4; border-bottom: 1px dashed #eee; padding-bottom: 10px; }
@@ -39,6 +42,9 @@
         <input type="text" id="icao" placeholder="スペース区切り" oninput="saveToLocal()">
         <button onclick="fetchWeather()">Search</button>
         <button onclick="downloadPDF()" class="btn-pdf">Download PDF</button>
+        <label class="pdf-option">
+            <input type="checkbox" id="include-jst-pdf" checked> PDFにJST時刻を併記
+        </label>
     </div>
     
     <div id="result"></div>
@@ -166,16 +172,17 @@
                 alert("PDFに出力するMETARまたはTAFにチェックを入れてください。");
                 return;
             }
+
+            // PDFにJSTを含めるかの設定を取得
+            const includeJst = document.getElementById('include-jst-pdf').checked;
+
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape', 'pt', 'a4');
             const margin = 40;
-            const lineHeight = 16; // 少し広めに調整
+            const lineHeight = 16;
             const pageHeight = doc.internal.pageSize.height;
             const pageWidth = doc.internal.pageSize.width;
-            
-            // JST情報の開始位置（縦に揃えるためのX座標）
-            // Landscape A4は約841pt。Rawテキスト用に余裕を持ちつつ400pt付近に設定
-            const jstAlignX = 400; 
+            const jstAlignX = 420; // JST情報の開始位置
 
             let y = margin;
             let hasValidData = false;
@@ -196,52 +203,55 @@
                         y = margin;
                     }
 
-                    // --- 時刻データの解析 ---
-                    let issueTimeStr = "";
-                    const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
-                    if (issueMatch) {
-                        let t = parseToJstObj(issueMatch[1], issueMatch[2], issueMatch[3]);
-                        issueTimeStr = `${t.day} ${t.hour}:${t.min} JST Issued`;
-                    }
-
-                    let validStr = "";
-                    if (type === 'TAF') {
-                        const firstLine = text.split('\n')[0];
-                        const validMatch = firstLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
-                        if (validMatch) {
-                            let start = parseToJstObj(validMatch[1], validMatch[2]);
-                            let end = parseToJstObj(validMatch[3], validMatch[4]);
-                            validStr = `${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST Valid`;
-                        }
-                    }
-
-                    // --- ヘッダー (1行目：太字タイトル + 細字時刻) ---
+                    // --- ヘッダータイトル描画 ---
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(12);
                     doc.text(`${icao} ${type}`, margin, y);
 
-                    let subHeaderText = "";
-                    if (type === 'METAR' && issueTimeStr) {
-                        subHeaderText = `(${issueTimeStr})`;
-                    } else if (type === 'TAF') {
-                        if (issueTimeStr && validStr) subHeaderText = `(${issueTimeStr} / ${validStr})`;
-                        else if (issueTimeStr) subHeaderText = `(${issueTimeStr})`;
+                    // --- JST時刻の解析と描画 (設定が有効な場合のみ) ---
+                    if (includeJst) {
+                        let issueTimeStr = "";
+                        const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
+                        if (issueMatch) {
+                            let t = parseToJstObj(issueMatch[1], issueMatch[2], issueMatch[3]);
+                            issueTimeStr = `${t.day} ${t.hour}:${t.min} JST Issued`;
+                        }
+
+                        let validStr = "";
+                        if (type === 'TAF') {
+                            const firstLine = text.split('\n')[0];
+                            const validMatch = firstLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
+                            if (validMatch) {
+                                let start = parseToJstObj(validMatch[1], validMatch[2]);
+                                let end = parseToJstObj(validMatch[3], validMatch[4]);
+                                validStr = `${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST Valid`;
+                            }
+                        }
+
+                        let subHeaderText = "";
+                        if (type === 'METAR' && issueTimeStr) {
+                            subHeaderText = `(${issueTimeStr})`;
+                        } else if (type === 'TAF') {
+                            if (issueTimeStr && validStr) subHeaderText = `(${issueTimeStr} / ${validStr})`;
+                            else if (issueTimeStr) subHeaderText = `(${issueTimeStr})`;
+                        }
+
+                        if (subHeaderText) {
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(9);
+                            doc.text(subHeaderText, margin + 120, y);
+                        }
                     }
 
-                    if (subHeaderText) {
-                        doc.setFont("helvetica", "normal");
-                        doc.setFontSize(9);
-                        doc.text(subHeaderText, margin + 120, y); // 1行目の時刻も縦に揃える（近め）
-                    }
                     y += lineHeight + 5;
                     
                     // --- 本文描画 ---
                     const lines = text.split('\n');
                     lines.forEach((rawLine, index) => {
-                        let jstInfo = ""; // 追加するJST情報
+                        let jstInfo = "";
 
-                        // TAFの各行の有効時刻抽出
-                        if (type === 'TAF' && index > 0) {
+                        // TAFの各行の有効時刻抽出 (設定が有効な場合のみ)
+                        if (includeJst && type === 'TAF' && index > 0) {
                             const periodMatch = rawLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
@@ -256,7 +266,6 @@
                             }
                         }
 
-                        // 改ページチェック
                         if (y > pageHeight - margin) {
                             doc.addPage();
                             y = margin;
@@ -266,15 +275,15 @@
                         doc.setFontSize(13);
                         doc.text(rawLine, margin, y);
 
-                        if (jstInfo) {
+                        if (includeJst && jstInfo) {
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(9);
-                            doc.text(jstInfo, jstAlignX, y); // 指定した座標で縦に揃える
+                            doc.text(jstInfo, jstAlignX, y);
                         }
 
                         y += lineHeight;
                     });
-                    y += 15; // icaoごとのセパレート
+                    y += 15;
                 }
             });
             
