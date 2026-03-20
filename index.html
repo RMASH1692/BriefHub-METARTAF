@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Brief Hub METAR/TAF</title>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf-font-japanese@1.0.0/dist/jspdf-font-japanese.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-font-japanese@1.0.0/dist/jspdf-font-japanese.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; }
         h2 { text-align: center; font-weight: normal; border-bottom: 2px solid #0078D4; padding-bottom: 15px; margin-bottom: 20px; letter-spacing: 1px; color: #0078D4; }
@@ -45,7 +45,6 @@
     <div id="result"></div>
 
     <script>
-        // --- 新機能: LocalStorage関連 ---
         function saveToLocal() {
             const val = document.getElementById('icao').value;
             localStorage.setItem('savedIcaoCodes', val);
@@ -55,10 +54,9 @@
             const savedVal = localStorage.getItem('savedIcaoCodes');
             if (savedVal) {
                 document.getElementById('icao').value = savedVal;
-                fetchWeather(); // 以前の入力があれば自動で検索実行
+                fetchWeather();
             }
         };
-        // ------------------------------
 
         async function safeFetchJson(url) {
             try {
@@ -104,7 +102,7 @@
             const resultDiv = document.getElementById('result');
             
             if(icaos.length === 0) {
-                resultDiv.innerHTML = ''; // 入力が空なら結果をクリア
+                resultDiv.innerHTML = '';
                 return;
             }
 
@@ -173,29 +171,12 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape', 'pt', 'a4');
 
-            // --- [重要] 日本語フォント(NotoSansJP)の導入 ---
-            // NotoSansJP-Regular のサブセット（最小限の漢字）を読み込みます
-            // ネットワーク経由でフォントをロードするため async/await を使用
-            try {
-                // 日本語を表示するために標準のHELVETICAから、日本語対応フォントへ切り替える準備
-                // ※本来はBase64エンコードされたフォントが必要ですが、
-                // 手軽に日本語を通すため、ブラウザの標準フォント(MS Gothic等)を参照する設定にします。
-                // ただしjsPDF標準では日本語が出ないため、ここでは"全角を避ける"か"フォントURL"を指定します。
-                // ここでは最も確実な「日本語部分のみを標準フォントで描画する」ロジックで対応します。
-            } catch (e) { console.error("Font load error", e); }
-
             const margin = 40;
-            const lineHeight = 14;
+            const lineHeight = 16;
             const pageHeight = doc.internal.pageSize.height;
             const pageWidth = doc.internal.pageSize.width;
             let y = margin;
             let hasValidData = false;
-
-            // 日本語フォントを適用するための設定
-            // 外部フォントファイルをロードするのはコードが膨大になるため、
-            // 多くの環境で文字化けを防ぐ「Unicode対応フォント」の指定をシミュレートします。
-            // ※注意: jsPDFは標準で日本語を持ちません。以下のコードは日本語部分のみを
-            // 適切に処理するためのロジックを含んでいます。
 
             checkboxes.forEach(cb => {
                 const id = cb.value;
@@ -213,7 +194,7 @@
                         y = margin;
                     }
 
-                    // 時刻解析
+                    // --- 1. 日本語を含むヘッダーの構築 ---
                     let issueTimeStr = "";
                     const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
                     if (issueMatch) {
@@ -232,67 +213,74 @@
                         }
                     }
 
-                    // ヘッダーの描画（ここは日本語を含む可能性があるため、フォント設定に注意が必要）
-                    // 本来は doc.addFont が必要ですが、簡易的に「( )」などで囲む英字メインの構成にします
                     let headerText = `${icao} ${type}`;
-                    let subHeaderText = "";
                     if (type === 'METAR' && issueTimeStr) {
-                        subHeaderText = ` (${issueTimeStr})`;
+                        headerText += ` (${issueTimeStr})`;
                     } else if (type === 'TAF') {
-                        subHeaderText = ` (${issueTimeStr} / ${validStr})`;
+                        if (issueTimeStr && validStr) headerText += ` (${issueTimeStr} / ${validStr})`;
+                        else if (issueTimeStr) headerText += ` (${issueTimeStr})`;
                     }
 
-                    doc.setFont("helvetica", "bold");
+                    // ヘッダー描画（日本語フォントを指定）
+                    doc.setFont("japanese", "bold");
                     doc.setFontSize(12);
-                    // 日本語が含まれる場合、jsPDFの標準フォントでは「?」になります。
-                    // そのため、日本語を回避しつつ意味が通じる最小限の日本語（日、発行、有効）のみを
-                    // 特殊な方法で差し込むか、英語のラベルにします。
-                    
-                    // 【修正案】「日」などの日本語を表示させるため、
-                    // もしフォントファイルを別途用意するのが難しい場合は、
-                    // 以下のように記号を活用して「日本語を使わずに」違和感を消す方法もあります。
-                    // 例: 19th 08:00 (JST Issued)
-                    
-                    doc.text(headerText + subHeaderText, margin, y);
+                    doc.text(headerText, margin, y);
                     y += lineHeight + 5;
                     
-                    // --- 本文は現在のお気に入りのフォントを維持 ---
-                    doc.setFont("courier", "normal");
-                    doc.setFontSize(14);
+                    // --- 2. 本文の描画 ---
                     const lines = text.split('\n');
-                    
                     lines.forEach((rawLine, index) => {
                         let processedLine = rawLine;
+                        let hasJapaneseInLine = false;
+
+                        // TAFの2行目以降にJST時間を付加
                         if (type === 'TAF' && index > 0) {
                             const periodMatch = processedLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
                                 processedLine += `  (${start.day}日 ${start.hour}:${start.min}~${end.day}日 ${end.hour}:${end.min} JST)`;
+                                hasJapaneseInLine = true;
                             } else {
                                 const fmMatch = processedLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
                                     processedLine += `  (${start.day}日 ${start.hour}:${start.min} JST~)`;
+                                    hasJapaneseInLine = true;
                                 }
                             }
                         }
 
+                        // 行の折り返し処理
                         const wrappedLines = doc.splitTextToSize(processedLine, pageWidth - margin * 2);
                         wrappedLines.forEach(line => {
                             if (y > pageHeight - margin) {
                                 doc.addPage();
                                 y = margin;
-                                doc.setFont("courier", "normal");
                             }
+
+                            // 行の内容によってフォントをスイッチ
+                            // 日本語を含む（「日」という文字がある）場合はjapanese、それ以外はcourier
+                            if (hasJapaneseInLine || line.includes("日")) {
+                                doc.setFont("japanese", "normal");
+                                doc.setFontSize(11); // 日本語は少し小さめがバランス良
+                            } else {
+                                doc.setFont("courier", "normal");
+                                doc.setFontSize(14); // 本文はお好みのサイズ
+                            }
+
                             doc.text(line, margin, y);
                             y += lineHeight;
                         });
                     });
-                    y += 15;
+                    y += 15; // カード間の余白
                 }
             });
             
+            if (!hasValidData) {
+                alert("出力可能な気象データがありません。");
+                return;
+            }
             doc.save("BriefHub_METARTAF.pdf");
         }
     </script>
