@@ -148,6 +148,20 @@
             resultDiv.innerHTML = htmlOutput;
         }
 
+        function parseToJstObj(dayStr, hourStr, minStr = "00") {
+            let d = new Date();
+            let targetDay = parseInt(dayStr, 10);
+            if (targetDay > d.getUTCDate() + 15) d.setUTCMonth(d.getUTCMonth() - 1);
+            d.setUTCDate(targetDay);
+            d.setUTCHours(parseInt(hourStr, 10));
+            d.setUTCMinutes(parseInt(minStr, 10));
+            return {
+                day: d.getDate(),
+                hour: d.getHours(),
+                min: d.getMinutes().toString().padStart(2, '0')
+            };
+        }
+
         function downloadPDF() {
             const checkboxes = document.querySelectorAll('.pdf-cb:checked');
             if (checkboxes.length === 0) {
@@ -177,15 +191,68 @@
                         doc.addPage();
                         y = margin;
                     }
+
+                    // --- [追加] 発行時刻と有効時刻の抽出・変換 ---
+                    let issueTimeStr = "";
+                    const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
+                    if (issueMatch) {
+                        let t = parseToJstObj(issueMatch[1], issueMatch[2], issueMatch[3]);
+                        issueTimeStr = `${t.day}日 ${t.hour}:${t.min} JST 発行`;
+                    }
+
+                    let validStr = "";
+                    if (type === 'TAF') {
+                        const firstLine = text.split('\n')[0];
+                        const validMatch = firstLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
+                        if (validMatch) {
+                            let start = parseToJstObj(validMatch[1], validMatch[2]);
+                            let end = parseToJstObj(validMatch[3], validMatch[4]);
+                            validStr = `${start.day}日 ${start.hour}:${start.min}~${end.day}日 ${end.hour}:${end.min} JST 有効`;
+                        }
+                    }
+
+                    // ヘッダーの組み立て
+                    let headerText = `${icao} ${type}`;
+                    if (type === 'METAR' && issueTimeStr) {
+                        headerText += ` (${issueTimeStr})`;
+                    } else if (type === 'TAF') {
+                        if (issueTimeStr && validStr) headerText += ` (${issueTimeStr} / ${validStr})`;
+                        else if (issueTimeStr) headerText += ` (${issueTimeStr})`;
+                    }
+                    // ----------------------------------------------
+
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(12);
-                    doc.text(`${icao} ${type}`, margin, y);
+                    doc.text(headerText, margin, y);
                     y += lineHeight + 5;
+                    
                     doc.setFont("courier", "normal");
                     doc.setFontSize(14);
                     const lines = text.split('\n');
-                    lines.forEach(rawLine => {
-                        const wrappedLines = doc.splitTextToSize(rawLine, pageWidth - margin * 2);
+                    
+                    lines.forEach((rawLine, index) => {
+                        let processedLine = rawLine;
+
+                        // --- [追加] TAFの2行目以降の有効時刻抽出 ---
+                        if (type === 'TAF' && index > 0) {
+                            // BECMG, TEMPO 等の DDHH/DDHH を検索
+                            const periodMatch = processedLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
+                            if (periodMatch) {
+                                let start = parseToJstObj(periodMatch[1], periodMatch[2]);
+                                let end = parseToJstObj(periodMatch[3], periodMatch[4]);
+                                processedLine += `  (${start.day}日 ${start.hour}:${start.min}~${end.day}日 ${end.hour}:${end.min} JST)`;
+                            } else {
+                                // FM の DDHHMM を検索
+                                const fmMatch = processedLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
+                                if (fmMatch) {
+                                    let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
+                                    processedLine += `  (${start.day}日 ${start.hour}:${start.min} JST~)`;
+                                }
+                            }
+                        }
+                        // ----------------------------------------------
+
+                        const wrappedLines = doc.splitTextToSize(processedLine, pageWidth - margin * 2);
                         wrappedLines.forEach(line => {
                             if (y > pageHeight - margin) {
                                 doc.addPage();
@@ -199,6 +266,7 @@
                     y += 15;
                 }
             });
+            
             if (!hasValidData) {
                 alert("出力可能な気象データがありません。");
                 return;
