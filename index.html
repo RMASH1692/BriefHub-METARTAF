@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brief Hub METAR/TAF</title>
+    <title>Aviation Weather</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf-font-japanese@1.0.0/dist/jspdf-font-japanese.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; }
         h2 { text-align: center; font-weight: normal; border-bottom: 2px solid #0078D4; padding-bottom: 15px; margin-bottom: 20px; letter-spacing: 1px; color: #0078D4; }
@@ -45,6 +44,7 @@
     <div id="result"></div>
 
     <script>
+        // --- 新機能: LocalStorage関連 ---
         function saveToLocal() {
             const val = document.getElementById('icao').value;
             localStorage.setItem('savedIcaoCodes', val);
@@ -54,9 +54,10 @@
             const savedVal = localStorage.getItem('savedIcaoCodes');
             if (savedVal) {
                 document.getElementById('icao').value = savedVal;
-                fetchWeather();
+                fetchWeather(); // 以前の入力があれば自動で検索実行
             }
         };
+        // ------------------------------
 
         async function safeFetchJson(url) {
             try {
@@ -102,7 +103,7 @@
             const resultDiv = document.getElementById('result');
             
             if(icaos.length === 0) {
-                resultDiv.innerHTML = '';
+                resultDiv.innerHTML = ''; // 入力が空なら結果をクリア
                 return;
             }
 
@@ -160,19 +161,17 @@
                 min: d.getMinutes().toString().padStart(2, '0')
             };
         }
-        
-        async function downloadPDF() {
+
+        function downloadPDF() {
             const checkboxes = document.querySelectorAll('.pdf-cb:checked');
             if (checkboxes.length === 0) {
                 alert("PDFに出力するMETARまたはTAFにチェックを入れてください。");
                 return;
             }
-
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape', 'pt', 'a4');
-
             const margin = 40;
-            const lineHeight = 16;
+            const lineHeight = 14;
             const pageHeight = doc.internal.pageSize.height;
             const pageWidth = doc.internal.pageSize.width;
             let y = margin;
@@ -188,18 +187,16 @@
                     let text = textEl.innerText;
                     if (text.includes("現在有効なMETARがありません") || text.includes("TAFは発行されていません")) return;
                     hasValidData = true;
-
                     if (y > pageHeight - margin - 30) {
                         doc.addPage();
                         y = margin;
                     }
 
-                    // --- 1. 日本語を含むヘッダーの構築 ---
                     let issueTimeStr = "";
                     const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
                     if (issueMatch) {
                         let t = parseToJstObj(issueMatch[1], issueMatch[2], issueMatch[3]);
-                        issueTimeStr = `${t.day}日 ${t.hour}:${t.min} JST 発行`;
+                        issueTimeStr = `${t.day} ${t.hour}:${t.min} JST Issued`;
                     }
 
                     let validStr = "";
@@ -209,10 +206,11 @@
                         if (validMatch) {
                             let start = parseToJstObj(validMatch[1], validMatch[2]);
                             let end = parseToJstObj(validMatch[3], validMatch[4]);
-                            validStr = `${start.day}日 ${start.hour}:${start.min}~${end.day}日 ${end.hour}:${end.min} JST 有効`;
+                            validStr = `${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST Valid`;
                         }
                     }
 
+                    // ヘッダーの組み立て
                     let headerText = `${icao} ${type}`;
                     if (type === 'METAR' && issueTimeStr) {
                         headerText += ` (${issueTimeStr})`;
@@ -220,60 +218,51 @@
                         if (issueTimeStr && validStr) headerText += ` (${issueTimeStr} / ${validStr})`;
                         else if (issueTimeStr) headerText += ` (${issueTimeStr})`;
                     }
+                    // ----------------------------------------------
 
-                    // ヘッダー描画（日本語フォントを指定）
-                    doc.setFont("japanese", "bold");
+                    doc.setFont("helvetica", "bold");
                     doc.setFontSize(12);
                     doc.text(headerText, margin, y);
                     y += lineHeight + 5;
                     
-                    // --- 2. 本文の描画 ---
+                    doc.setFont("courier", "normal");
+                    doc.setFontSize(14);
                     const lines = text.split('\n');
+                    
                     lines.forEach((rawLine, index) => {
                         let processedLine = rawLine;
-                        let hasJapaneseInLine = false;
 
-                        // TAFの2行目以降にJST時間を付加
+                        // --- [追加] TAFの2行目以降の有効時刻抽出 (英語表記) ---
                         if (type === 'TAF' && index > 0) {
+                            // BECMG, TEMPO 等の DDHH/DDHH を検索
                             const periodMatch = processedLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                processedLine += `  (${start.day}日 ${start.hour}:${start.min}~${end.day}日 ${end.hour}:${end.min} JST)`;
-                                hasJapaneseInLine = true;
+                                processedLine += `  (${start.day} ${start.hour}:${start.min}~${end.day} ${end.hour}:${end.min} JST)`; // 英語化
                             } else {
+                                // FM の DDHHMM を検索
                                 const fmMatch = processedLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    processedLine += `  (${start.day}日 ${start.hour}:${start.min} JST~)`;
-                                    hasJapaneseInLine = true;
+                                    processedLine += `  (${start.day} ${start.hour}:${start.min} JST~)`; // 英語化
                                 }
                             }
                         }
+                        // ----------------------------------------------
 
-                        // 行の折り返し処理
                         const wrappedLines = doc.splitTextToSize(processedLine, pageWidth - margin * 2);
                         wrappedLines.forEach(line => {
                             if (y > pageHeight - margin) {
                                 doc.addPage();
                                 y = margin;
-                            }
-
-                            // 行の内容によってフォントをスイッチ
-                            // 日本語を含む（「日」という文字がある）場合はjapanese、それ以外はcourier
-                            if (hasJapaneseInLine || line.includes("日")) {
-                                doc.setFont("japanese", "normal");
-                                doc.setFontSize(11); // 日本語は少し小さめがバランス良
-                            } else {
                                 doc.setFont("courier", "normal");
-                                doc.setFontSize(14); // 本文はお好みのサイズ
                             }
-
                             doc.text(line, margin, y);
                             y += lineHeight;
                         });
                     });
-                    y += 15; // カード間の余白
+                    y += 15;
                 }
             });
             
@@ -285,4 +274,3 @@
         }
     </script>
 </body>
-</html>
