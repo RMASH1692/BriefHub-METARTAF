@@ -215,23 +215,25 @@
                         const w = doc.getTextWidth(line);
                         if (w > maxLineWidth) maxLineWidth = w;
                     });
-                    // 最も長い行の幅 + 20pt の余白をあけた位置をJSTの基準線とする
                     const dynamicJstAlignX = margin + maxLineWidth + 20;
 
                     // --- ヘッダーの描画 ---
+                    // タイトル部分は Helvetica Bold
                     doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0, 120, 212);
                     doc.text(`${icao} ${type}`, margin, y);
-                    doc.setTextColor(0, 0, 0); // 色をリセット
+                    doc.setTextColor(0, 0, 0); 
 
                     if (includeJst) {
                         let subHeaderText = "";
                         const issueMatch = text.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
                         if (issueMatch) {
                             let t = parseToJstObj(issueMatch[1], issueMatch[2], issueMatch[3]);
+                            // parseToJstObj がスペース埋めを返すので、文字列の長さが常に固定されます
                             subHeaderText = `(${t.day} ${t.hour}:${t.min} JST Issued)`;
                         }
                         if (subHeaderText) {
-                            doc.setFont("helvetica", "normal").setFontSize(9);
+                            // 発行時刻も Courier に切り替えて縦のラインを揃える
+                            doc.setFont("courier", "normal").setFontSize(9);
                             doc.text(subHeaderText, margin + 120, y);
                         }
                     }
@@ -242,11 +244,9 @@
                     lines.forEach((rawLine, index) => {
                         if (y > pageHeight - margin) { doc.addPage(); y = margin; }
 
-                        // 主データ（METAR/TAF）
                         doc.setFont("courier", "normal").setFontSize(13).setTextColor(0, 0, 0);
                         doc.text(rawLine, margin, y);
 
-                        // VMC / IMC の判定（METARの1行目のみ）
                         if (includeVfr && type === 'METAR' && index === 0) {
                             const result = judgeFlightCategory(rawLine);
                             if (result) {
@@ -258,26 +258,23 @@
                             }
                         }
 
-                        // JST時間併記
                         if (includeJst && type === 'TAF') {
                             let jstInfo = "";
                             const periodMatch = rawLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                // 文字数を完全に固定する
                                 jstInfo = `(${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST)`;
                             } else {
                                 const fmMatch = rawLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    // FMの場合も文字幅を合わせるため、後ろにスペースを調整
-                                    jstInfo = `(${start.day} ${start.hour}:${start.min} JST ~             )`;
+                                    // スペースで長さを調整し、periodMatchの括弧位置と合わせる
+                                    jstInfo = `(${start.day} ${start.hour}:${start.min} JST ~              )`;
                                 }
                             }
                             
                             if (jstInfo) {
-                                // 等幅フォント(Courier)に切り替え
                                 doc.setFont("courier", "normal").setFontSize(9);
                                 doc.text(jstInfo, dynamicJstAlignX, y); 
                             }
