@@ -183,10 +183,6 @@
             const margin = 40;
             const lineHeight = 16;
             const pageHeight = doc.internal.pageSize.height;
-            const pageWidth = doc.internal.pageSize.width; // ページの横幅を取得
-            
-            // 右端の余白（margin）の位置をJSTの基準線にする
-            const jstRightX = pageWidth - margin; 
 
             let y = margin;
             let hasValidData = false;
@@ -204,9 +200,22 @@
 
                     if (y > pageHeight - margin - 30) { doc.addPage(); y = margin; }
 
+                    // --- JSTの開始位置を動的に計算する ---
+                    const lines = text.split('\n');
+                    let maxLineWidth = 0;
+                    doc.setFont("courier", "normal");
+                    doc.setFontSize(13);
+                    lines.forEach(line => {
+                        const w = doc.getTextWidth(line);
+                        if (w > maxLineWidth) maxLineWidth = w;
+                    });
+                    // 最も長い行の幅 + 20pt の余白をあけた位置をJSTの基準線とする
+                    const dynamicJstAlignX = margin + maxLineWidth + 20;
+
+                    // --- ヘッダーの描画 ---
                     doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0, 120, 212);
                     doc.text(`${icao} ${type}`, margin, y);
-                    doc.setTextColor(0, 0, 0);
+                    doc.setTextColor(0, 0, 0); // 色をリセット
 
                     if (includeJst) {
                         let subHeaderText = "";
@@ -217,19 +226,21 @@
                         }
                         if (subHeaderText) {
                             doc.setFont("helvetica", "normal").setFontSize(9);
-                            // ヘッダーのJSTも右端に揃えると非常に綺麗です
-                            doc.text(subHeaderText, jstRightX, y, { align: 'right' });
+                            doc.text(subHeaderText, margin + 120, y);
                         }
                     }
 
                     y += lineHeight + 5;
-                    const lines = text.split('\n');
+                    
+                    // --- 本文の描画 ---
                     lines.forEach((rawLine, index) => {
                         if (y > pageHeight - margin) { doc.addPage(); y = margin; }
 
+                        // 主データ（METAR/TAF）
                         doc.setFont("courier", "normal").setFontSize(13).setTextColor(0, 0, 0);
                         doc.text(rawLine, margin, y);
 
+                        // VMC / IMC の判定（METARの1行目のみ）
                         if (includeVfr && type === 'METAR' && index === 0) {
                             const result = judgeFlightCategory(rawLine);
                             if (result) {
@@ -241,26 +252,26 @@
                             }
                         }
 
-                        if (includeJst && type === 'TAF' && index > 0) {
+                        // JST時間併記（TAFのみ、1行目も含めるように修正）
+                        if (includeJst && type === 'TAF') {
                             let jstInfo = "";
                             const periodMatch = rawLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                jstInfo = `${start.day} ${start.hour}:${start.min} - ${end.day} ${end.hour}:${end.min} JST`;
+                                jstInfo = `(${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST)`;
                             } else {
                                 const fmMatch = rawLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    jstInfo = `${start.day} ${start.hour}:${start.min} JST -`;
+                                    jstInfo = `(${start.day} ${start.hour}:${start.min} JST~)`;
                                 }
                             }
+                            
                             if (jstInfo) {
-                                doc.setFont("helvetica", "normal").setFontSize(8.5); // 少しだけ小さくして衝突リスクを軽減
-                                doc.setTextColor(100, 100, 100); // 補足情報なのでグレーに
-                                // 右端に右揃えで配置
-                                doc.text(jstInfo, jstRightX, y, { align: 'right' });
-                                doc.setTextColor(0, 0, 0);
+                                // METARと同じ黒字・9ptで描画
+                                doc.setFont("helvetica", "normal").setFontSize(9);
+                                doc.text(jstInfo, dynamicJstAlignX, y); 
                             }
                         }
                         y += lineHeight;
