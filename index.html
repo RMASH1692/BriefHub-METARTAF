@@ -117,9 +117,20 @@
                 let hasMetar = !metarData.error && metarData.raw;
                 let hasTaf = !tafData.error && tafData.raw;
 
+                // --- VMC / IMC 判定ラベルの作成 ---
+                let flightCatHtml = '';
+                if (hasMetar) {
+                    const result = judgeFlightCategory(metarData.raw);
+                    if (result) {
+                        const colorStr = `rgb(${result.color.join(',')})`;
+                        // フォントサイズや余白は、H3タグに馴染むよう調整しています
+                        flightCatHtml = `<span style="color: ${colorStr}; margin-left: 15px; font-size: 0.85em; font-weight: bold;">[${result.label}]</span>`;
+                    }
+                }
+
                 htmlOutput += `
                     <div class="card">
-                        <h3>${icao}
+                        <h3>${icao}${flightCatHtml}
                             <div class="checkbox-group">
                                 <label><input type="checkbox" class="pdf-cb" value="metar-${icao}" data-icao="${icao}" data-type="METAR"> METAR</label>
                                 <label><input type="checkbox" class="pdf-cb" value="taf-${icao}" data-icao="${icao}" data-type="TAF"> TAF</label>
