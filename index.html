@@ -146,7 +146,13 @@
             d.setUTCDate(targetDay);
             d.setUTCHours(parseInt(hourStr, 10));
             d.setUTCMinutes(parseInt(minStr, 10));
-            return { day: d.getDate(), hour: d.getHours(), min: d.getMinutes().toString().padStart(2, '0') };
+            
+            // 0ではなく「スペース」で2桁に揃える
+            return { 
+                day: d.getDate().toString().padStart(2, ' '), 
+                hour: d.getHours().toString().padStart(2, ' '), 
+                min: d.getMinutes().toString().padStart(2, '0') 
+            };
         }
 
         // VMC or IMC 判定ロジック
@@ -252,25 +258,27 @@
                             }
                         }
 
-                        // JST時間併記（TAFのみ、1行目も含めるように修正）
+                        // JST時間併記
                         if (includeJst && type === 'TAF') {
                             let jstInfo = "";
                             const periodMatch = rawLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
+                                // 文字数を完全に固定する
                                 jstInfo = `(${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST)`;
                             } else {
                                 const fmMatch = rawLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    jstInfo = `(${start.day} ${start.hour}:${start.min} JST~)`;
+                                    // FMの場合も文字幅を合わせるため、後ろにスペースを調整
+                                    jstInfo = `(${start.day} ${start.hour}:${start.min} JST ~             )`;
                                 }
                             }
                             
                             if (jstInfo) {
-                                // METARと同じ黒字・9ptで描画
-                                doc.setFont("helvetica", "normal").setFontSize(9);
+                                // 等幅フォント(Courier)に切り替え
+                                doc.setFont("courier", "normal").setFontSize(9);
                                 doc.text(jstInfo, dynamicJstAlignX, y); 
                             }
                         }
