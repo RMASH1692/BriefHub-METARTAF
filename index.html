@@ -183,7 +183,10 @@
             const margin = 40;
             const lineHeight = 16;
             const pageHeight = doc.internal.pageSize.height;
-            const jstAlignX = 420; 
+            const pageWidth = doc.internal.pageSize.width; // ページの横幅を取得
+            
+            // 右端の余白（margin）の位置をJSTの基準線にする
+            const jstRightX = pageWidth - margin; 
 
             let y = margin;
             let hasValidData = false;
@@ -203,7 +206,7 @@
 
                     doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0, 120, 212);
                     doc.text(`${icao} ${type}`, margin, y);
-                    doc.setTextColor(0, 0, 0); // Reset color
+                    doc.setTextColor(0, 0, 0);
 
                     if (includeJst) {
                         let subHeaderText = "";
@@ -214,7 +217,8 @@
                         }
                         if (subHeaderText) {
                             doc.setFont("helvetica", "normal").setFontSize(9);
-                            doc.text(subHeaderText, margin + 120, y);
+                            // ヘッダーのJSTも右端に揃えると非常に綺麗です
+                            doc.text(subHeaderText, jstRightX, y, { align: 'right' });
                         }
                     }
 
@@ -223,41 +227,40 @@
                     lines.forEach((rawLine, index) => {
                         if (y > pageHeight - margin) { doc.addPage(); y = margin; }
 
-                        // Rawデータ本体
                         doc.setFont("courier", "normal").setFontSize(13).setTextColor(0, 0, 0);
                         doc.text(rawLine, margin, y);
 
-                        // VMC/IMC 表示 (METARのみ、かつ1行目の末尾)
                         if (includeVfr && type === 'METAR' && index === 0) {
                             const result = judgeFlightCategory(rawLine);
                             if (result) {
-                                // 行の長さを取得して、その少し後ろに描画
                                 const textWidth = doc.getTextWidth(rawLine);
                                 doc.setFont("helvetica", "bold").setFontSize(13);
                                 doc.setTextColor(result.color[0], result.color[1], result.color[2]);
                                 doc.text(`  [${result.label}]`, margin + textWidth, y);
-                                doc.setTextColor(0, 0, 0); // 戻す
+                                doc.setTextColor(0, 0, 0);
                             }
                         }
 
-                        // JST時間併記
                         if (includeJst && type === 'TAF' && index > 0) {
                             let jstInfo = "";
                             const periodMatch = rawLine.match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/);
                             if (periodMatch) {
                                 let start = parseToJstObj(periodMatch[1], periodMatch[2]);
                                 let end = parseToJstObj(periodMatch[3], periodMatch[4]);
-                                jstInfo = `(${start.day} ${start.hour}:${start.min} ~ ${end.day} ${end.hour}:${end.min} JST)`;
+                                jstInfo = `${start.day} ${start.hour}:${start.min} - ${end.day} ${end.hour}:${end.min} JST`;
                             } else {
                                 const fmMatch = rawLine.match(/\bFM(\d{2})(\d{2})(\d{2})\b/);
                                 if (fmMatch) {
                                     let start = parseToJstObj(fmMatch[1], fmMatch[2], fmMatch[3]);
-                                    jstInfo = `(${start.day} ${start.hour}:${start.min} JST~)`;
+                                    jstInfo = `${start.day} ${start.hour}:${start.min} JST -`;
                                 }
                             }
                             if (jstInfo) {
-                                doc.setFont("helvetica", "normal").setFontSize(9);
-                                doc.text(jstInfo, jstAlignX, y);
+                                doc.setFont("helvetica", "normal").setFontSize(8.5); // 少しだけ小さくして衝突リスクを軽減
+                                doc.setTextColor(100, 100, 100); // 補足情報なのでグレーに
+                                // 右端に右揃えで配置
+                                doc.text(jstInfo, jstRightX, y, { align: 'right' });
+                                doc.setTextColor(0, 0, 0);
                             }
                         }
                         y += lineHeight;
