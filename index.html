@@ -142,7 +142,7 @@
                         </div>
                         <div class="data-section">
                             <div class="data-label">TAF ${hasTaf ? convertToJST(tafData.raw) : ''}</div>
-                            <div class="raw-text" id="raw-taf-${icao}">${hasTaf ? formatTaf(tafData.raw) : '<span class="msg-none">TAFは発行されていません</span>'}</div>
+                            <div class="raw-text" id="raw-taf-${icao}">${hasTaf ? formatTaf(tafData.raw) : '<span class="msg-none">該当空港のTAFは発行されていません。</span>'}</div>
                         </div>
                     </div>
                 `;
